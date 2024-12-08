@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 iced = "0.13.1"
 appconfig = "0.2.1"
+serde = "1.0.215"

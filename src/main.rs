@@ -4,14 +4,28 @@ use iced::widget::{
 };
 use iced::widget::{Button, Column, Container, Slider};
 use iced::{Element, Fill};
+use std::{cell::RefCell, rc::Rc};
 use appconfig::AppConfigManager;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 struct MyStackingConfig{
     siril_path: String,
     data_path: String,
+    work_path: String,
     output_path: String
 }
+
+impl Default for MyStackingConfig {
+    fn default() -> Self {
+      Self {
+        siril_path: String::from(""),
+        data_path: String::from(""),
+        work_path: String::from(""),
+        output_path: String::from("")
+      }
+    }
+  }
 
 fn main() -> iced::Result {
     iced::run("My Stacking", MyStacking::update, MyStacking::view)
@@ -21,7 +35,9 @@ pub struct MyStacking {
     screen: Screen,
     siril_path: String,
     data_path: String,
-    output_path: String    
+    work_path: String,
+    output_path: String,
+    config: Rc<RefCell<MyStackingConfig>>
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +46,7 @@ pub enum Message {
     NextPressed,
     SirilPathChanged(String),
     DataPathChanged(String),
+    WorkPathChanged(String),
     OutputPathChanged(String)
 }
 
@@ -48,13 +65,20 @@ impl MyStacking {
                 }
             }
             Message::SirilPathChanged(siril_path) => {
-                self.siril_path = siril_path;
+                self.siril_path = siril_path.clone();
+                self.config.borrow_mut().siril_path = siril_path;
             }
             Message::DataPathChanged(data_path) => {
-                self.data_path = data_path;
+                self.data_path = data_path.clone();
+                self.config.borrow_mut().data_path = data_path;
+            }
+            Message::WorkPathChanged(work_path) => {
+                self.work_path = work_path.clone();
+                self.config.borrow_mut().work_path = work_path;
             }
             Message::OutputPathChanged(output_path) => {
-                self.output_path = output_path;
+                self.output_path = output_path.clone();
+                self.config.borrow_mut().output_path = output_path;
             }
         }
     }
@@ -95,22 +119,36 @@ impl MyStacking {
 
     fn can_continue(&self) -> bool {
         match self.screen {
-            Screen::Start => !self.siril_path.is_empty() && !self.data_path.is_empty() && !self.output_path.is_empty(),
+            Screen::Start => !self.siril_path.is_empty() && !self.data_path.is_empty() && !self.work_path.is_empty() && !self.output_path.is_empty(),
             Screen::Selection => true,
             Screen::Result => false
         }
     }
 
     fn start(&self) -> Column<Message> {
-        let mut siril_path = text_input("Type something to continue...", &self.siril_path)
+        let manager = AppConfigManager::new(
+            self.config.clone(),
+            std::env!("CARGO_CRATE_NAME"),
+            "org",
+          );
+        
+        let _ = manager.load();
+        let mut siril_path = &self.siril_path;
+        siril_path = &self.config.borrow().siril_path.clone();
+
+        let siril_path = text_input("Type something to continue...", &self.siril_path)
             .on_input(Message::SirilPathChanged)
             .padding(10)
             .size(30);
-        let mut  data_path = text_input("Type something to continue...", &self.data_path)
+        let data_path = text_input("Type something to continue...", &self.data_path)
             .on_input(Message::DataPathChanged)
             .padding(10)
             .size(30);
-        let mut output_path = text_input("Type something to continue...", &self.output_path)
+        let work_path = text_input("Type something to continue...", &self.work_path)
+            .on_input(Message::WorkPathChanged)
+            .padding(10)
+            .size(30);
+        let output_path = text_input("Type something to continue...", &self.output_path)
             .on_input(Message::OutputPathChanged)
             .padding(10)
             .size(30);
@@ -119,12 +157,21 @@ impl MyStacking {
             .push("Siril Path")
             .push(siril_path.secure(false))
             .push("Data Path")
-            .push(data_path)
+            .push(data_path.secure(false))
+            .push("Work Path")
+            .push(work_path.secure(false))
             .push("Output Path")
-            .push(output_path)
+            .push(output_path.secure(false))
     }
 
     fn selection(&self) -> Column<Message> {
+        let manager = AppConfigManager::new(
+            self.config.clone(),
+            std::env!("CARGO_CRATE_NAME"),
+            "org",
+          );
+        manager.save().unwrap();
+
         Self::container("Selection!")
     }
 
@@ -189,7 +236,9 @@ impl Default for MyStacking {
             screen: Screen::Start,
             siril_path: String::from(""),
             data_path: String::from(""),
-            output_path: String::from("")
+            work_path: String::from(""),
+            output_path: String::from(""),
+            config: Rc::from(RefCell::from(MyStackingConfig::default()))
         }
     }
 }
